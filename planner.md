@@ -77,25 +77,227 @@ A mobile application (iOS/Android) for tracking workouts and nutrition with goal
   - Monthly progress report
   - Custom date range reports
 
-## Technical Architecture
+## Software Architecture
 
-### Platform
-- **Framework**: React Native or Flutter for cross-platform development
-- **Target Platforms**: iOS (14+) and Android (10+)
+### Architecture Pattern: Feature-Based Clean Architecture
 
-### Data Storage
-- **Local Database**: SQLite or Realm for structured data storage
-- **File System**: For images/graphs/cached data
-- **Async Storage**: For user preferences and settings
+The app follows a **feature-based modular architecture** with clear separation of concerns across three layers:
 
-### Key Libraries/Dependencies
-- **UI Components**: Native Base / React Native Paper / Flutter Material
-- **Charts**: Victory Native (React Native) / FL Chart (Flutter)
-- **Database**: SQLite / Realm / Watermelon DB
-- **Timer**: React Native Background Timer or native timers
-- **Food Database API**: USDA FoodData Central API, Nutritionix API
-- **Notifications**: React Native Push Notification / Flutter Local Notifications
-- **Barcode Scanner**: React Native Camera / mobile_scanner (Flutter)
+```
+┌─────────────────────────────────────────────────┐
+│              Presentation Layer                  │
+│   (Screens, Components, Navigation, Hooks)      │
+├─────────────────────────────────────────────────┤
+│              Business Logic Layer                │
+│   (Context/State, Services, Utilities)          │
+├─────────────────────────────────────────────────┤
+│              Data Layer                          │
+│   (SQLite Database, AsyncStorage, APIs)         │
+└─────────────────────────────────────────────────┘
+```
+
+**Presentation Layer** — React Native screens and reusable UI components. Each feature (workout, nutrition, social, progress) owns its own screens and components. Navigation is managed centrally via React Navigation with a bottom tab navigator and nested stack navigators.
+
+**Business Logic Layer** — React Context providers manage global state (auth, theme, user preferences). Feature-specific services encapsulate business rules (e.g., calculating total volume, macro percentages, streak tracking). A shared `hooks/` directory provides custom hooks for common patterns (timers, database queries, form state).
+
+**Data Layer** — SQLite (via `expo-sqlite`) serves as the primary local database for all structured data. AsyncStorage handles lightweight key-value preferences. External API calls (USDA food database, AI chat) are isolated behind service modules so they can be swapped or mocked independently.
+
+### Data Flow
+
+```
+User Action → Screen → Hook/Context → Service → Database/API → State Update → Re-render
+```
+
+- **Local-first**: All reads/writes go to SQLite first. Network calls (food search, AI chat, social sync) are secondary and gracefully degrade offline.
+- **Unidirectional data flow**: State flows down through context providers; user events flow up through callbacks and service calls.
+
+### Key Architectural Decisions
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Cross-platform framework | React Native (Expo) | Mature ecosystem, large community, Expo simplifies builds and device APIs |
+| Language | TypeScript | Type safety, better IDE support, catches errors at compile time |
+| Local database | SQLite (expo-sqlite) | Reliable, performant, well-supported on both platforms |
+| State management | React Context + useReducer | Sufficient for local-first app; avoids Redux complexity |
+| Navigation | React Navigation v6 | Industry standard for React Native, supports tabs + stacks |
+| AI integration | OpenAI API (or Anthropic API) | Powers the AI coach feature for workout/nutrition advice |
+
+---
+
+## Technology Stack (Software Used)
+
+### Platform & Framework
+- **React Native** (via **Expo SDK 52+**) — Cross-platform mobile framework
+- **TypeScript** — Primary language for all application code
+- **Target Platforms**: iOS 14+ and Android 10+
+
+### Core Libraries
+
+| Category | Library | Purpose |
+|---|---|---|
+| Navigation | `@react-navigation/native` + `@react-navigation/bottom-tabs` + `@react-navigation/stack` | Tab bar and screen navigation |
+| Database | `expo-sqlite` | Local SQLite database for structured data |
+| Storage | `@react-native-async-storage/async-storage` | Key-value storage for preferences |
+| UI Components | `react-native-paper` | Material Design component library |
+| Charts | `react-native-chart-kit` or `victory-native` | Progress graphs and analytics |
+| Icons | `@expo/vector-icons` | Icon set for UI |
+| Notifications | `expo-notifications` | Rest timer alerts and reminders |
+| Camera/Barcode | `expo-camera` + `expo-barcode-scanner` | Barcode scanning for food lookup |
+| File System | `expo-file-system` | Export files (CSV, PDF) |
+| Sharing | `expo-sharing` | Share workout summaries and progress |
+| PDF Generation | `react-native-html-to-pdf` or `expo-print` | Generate PDF reports |
+
+### External APIs & Services
+
+| Service | Purpose |
+|---|---|
+| **USDA FoodData Central API** | Primary food/nutrition database (free, no key required for basic use) |
+| **Nutritionix API** | Secondary food database with barcode support |
+| **OpenAI API** or **Anthropic API** | AI-powered workout/nutrition coach |
+
+### Development & Build Tools
+
+| Tool | Purpose |
+|---|---|
+| **Expo CLI** | Development server, builds, OTA updates |
+| **EAS Build** | Cloud builds for iOS and Android binaries |
+| **ESLint + Prettier** | Code linting and formatting |
+| **Jest + React Native Testing Library** | Unit and component testing |
+| **Git + GitHub** | Version control and collaboration |
+
+---
+
+## Planned File Tree
+
+```
+Trainer/
+├── app.json                        # Expo app configuration
+├── App.tsx                         # Root component (providers + navigation)
+├── babel.config.js                 # Babel configuration
+├── tsconfig.json                   # TypeScript configuration
+├── package.json                    # Dependencies and scripts
+├── .env                            # API keys (USDA, AI service)
+├── .gitignore                      # Git ignore rules
+├── assets/                         # Static assets
+│   ├── icon.png                    # App icon
+│   ├── splash.png                  # Splash screen
+│   ├── fonts/                      # Custom fonts
+│   └── images/                     # Muscle group diagrams, onboarding images
+│
+├── src/
+│   ├── navigation/                 # Navigation configuration
+│   │   ├── AppNavigator.tsx        # Root navigator (auth check)
+│   │   ├── TabNavigator.tsx        # Bottom tab bar
+│   │   ├── WorkoutStack.tsx        # Workout screen stack
+│   │   ├── NutritionStack.tsx      # Nutrition screen stack
+│   │   ├── ProgressStack.tsx       # Progress screen stack
+│   │   ├── SocialStack.tsx         # Social screen stack
+│   │   └── ProfileStack.tsx        # Profile/settings screen stack
+│   │
+│   ├── screens/                    # All app screens
+│   │   ├── home/
+│   │   │   └── DashboardScreen.tsx
+│   │   ├── workout/
+│   │   │   ├── WorkoutListScreen.tsx
+│   │   │   ├── ActiveWorkoutScreen.tsx
+│   │   │   ├── ExerciseLibraryScreen.tsx
+│   │   │   ├── ExerciseDetailScreen.tsx
+│   │   │   ├── WorkoutTemplatesScreen.tsx
+│   │   │   └── CreateTemplateScreen.tsx
+│   │   ├── nutrition/
+│   │   │   ├── FoodLogScreen.tsx
+│   │   │   ├── AddFoodScreen.tsx
+│   │   │   ├── FoodDetailScreen.tsx
+│   │   │   ├── BarcodeScannerScreen.tsx
+│   │   │   └── CreateCustomFoodScreen.tsx
+│   │   ├── progress/
+│   │   │   ├── ProgressDashboardScreen.tsx
+│   │   │   ├── ExerciseProgressScreen.tsx
+│   │   │   └── NutritionAnalyticsScreen.tsx
+│   │   ├── social/
+│   │   │   ├── FeedScreen.tsx
+│   │   │   ├── FriendsScreen.tsx
+│   │   │   └── CreatePostScreen.tsx
+│   │   ├── profile/
+│   │   │   ├── ProfileScreen.tsx
+│   │   │   ├── SettingsScreen.tsx
+│   │   │   ├── GoalsScreen.tsx
+│   │   │   └── DataExportScreen.tsx
+│   │   └── ai/
+│   │       └── AiCoachScreen.tsx
+│   │
+│   ├── components/                 # Reusable UI components
+│   │   ├── common/
+│   │   │   ├── Button.tsx
+│   │   │   ├── Card.tsx
+│   │   │   ├── Input.tsx
+│   │   │   ├── Modal.tsx
+│   │   │   ├── ProgressBar.tsx
+│   │   │   └── LoadingSpinner.tsx
+│   │   ├── workout/
+│   │   │   ├── SetRow.tsx
+│   │   │   ├── ExerciseCard.tsx
+│   │   │   ├── RestTimer.tsx
+│   │   │   └── WorkoutSummaryCard.tsx
+│   │   ├── nutrition/
+│   │   │   ├── FoodItemRow.tsx
+│   │   │   ├── MacroRing.tsx
+│   │   │   └── MealSection.tsx
+│   │   └── charts/
+│   │       ├── LineGraph.tsx
+│   │       ├── BarChart.tsx
+│   │       └── PieChart.tsx
+│   │
+│   ├── context/                    # React Context providers
+│   │   ├── AuthContext.tsx          # User session state
+│   │   ├── ThemeContext.tsx         # Light/dark theme
+│   │   └── PreferencesContext.tsx   # User preferences (units, etc.)
+│   │
+│   ├── services/                   # Business logic and API calls
+│   │   ├── database/
+│   │   │   ├── init.ts             # Database initialization and migrations
+│   │   │   ├── workoutDb.ts        # Workout CRUD operations
+│   │   │   ├── nutritionDb.ts      # Nutrition CRUD operations
+│   │   │   ├── exerciseDb.ts       # Exercise library queries
+│   │   │   ├── socialDb.ts         # Social feature queries
+│   │   │   └── userDb.ts           # User profile queries
+│   │   ├── api/
+│   │   │   ├── foodApi.ts          # USDA / Nutritionix API calls
+│   │   │   └── aiApi.ts            # AI coach API calls
+│   │   ├── workoutService.ts       # Workout calculations (volume, PRs)
+│   │   ├── nutritionService.ts     # Macro calculations, goal tracking
+│   │   ├── exportService.ts        # CSV/PDF generation
+│   │   └── notificationService.ts  # Push notification scheduling
+│   │
+│   ├── hooks/                      # Custom React hooks
+│   │   ├── useTimer.ts             # Rest timer logic
+│   │   ├── useDatabase.ts          # Database query wrapper
+│   │   ├── useFood.ts              # Food search and lookup
+│   │   └── useProgress.ts          # Progress data aggregation
+│   │
+│   ├── types/                      # TypeScript type definitions
+│   │   ├── workout.ts              # Workout, Exercise, Set, Template types
+│   │   ├── nutrition.ts            # Food, FoodLog, FoodItem types
+│   │   ├── social.ts               # Friend, Post, Like, Comment types
+│   │   ├── user.ts                 # User, Goals, Preferences types
+│   │   └── navigation.ts           # Navigation param list types
+│   │
+│   ├── constants/                  # App-wide constants
+│   │   ├── exercises.ts            # Pre-populated exercise library data
+│   │   ├── muscleGroups.ts         # Muscle group definitions
+│   │   ├── theme.ts                # Color palette, spacing, typography
+│   │   └── config.ts               # API URLs, feature flags
+│   │
+│   └── utils/                      # Pure utility functions
+│       ├── formatting.ts           # Number/date/unit formatting
+│       ├── validation.ts           # Input validation helpers
+│       └── calculations.ts         # Shared math (BMR, TDEE, etc.)
+│
+└── __tests__/                      # Test files (mirrors src/ structure)
+    ├── services/
+    ├── hooks/
+    └── components/
+```
 
 ## Data Models
 
